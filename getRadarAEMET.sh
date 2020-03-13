@@ -186,7 +186,7 @@ function backupFiles {
 	do
 		local basename=$(basename $file)
 		local date=$(echo $basename | sed -n -E "s/^([0-9]{12}).*$/\1/p")
-		local year="20${date:0:4}"
+		local year="${date:0:4}"
 		local month="${date:4:2}"
 		local day="${date:6:2}"
 
