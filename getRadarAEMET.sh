@@ -58,7 +58,7 @@ function getRadarName {
 
 function getLastDownloadedFilename {
 	local filename=''
-    # Check that the variable is set and the file exists
+	# Check that the variable is set and the file exists
 	if [ -n $last_downloaded_filename ] && [ -f $last_downloaded_filename ]; then
 		filename=`cat $last_downloaded_filename`
 	fi
@@ -67,138 +67,138 @@ function getLastDownloadedFilename {
 }
 
 function setLastDownloadedFilename {
-    local filename=$1
+	local filename=$1
 
-    echo $filename > $last_downloaded_filename
+	echo $filename > $last_downloaded_filename
 }
 
 function downloadImages {
-    local previous_dir=$(pwd)
+	local previous_dir=$(pwd)
 	local working_dir=$1
 
-    # Change dir as curl with -JO options downloads in the current dir
-    cd $working_dir
+	# Change dir as curl with -JO options downloads in the current dir
+	cd $working_dir
 
-    log "INFO: Downloading images..."
+	log "INFO: Downloading images..."
 	# Curl options used:
-    #   -I      HEAD HTTP Request
+	#   -I      HEAD HTTP Request
 	#	-L		Follow redirects
 	# 	-s 		Silent
-    #   -f      Fail on server errors
+	#   -f      Fail on server errors
 	#	-OJ		Download the file using the Content-Disposition filename
 	#	-w		Echo to Stout the filename
 	#	-m 		Timeout
 
-    # First issue a HEAD request only to retrieve the Content-Disposition Header with the server filename.
-    file_to_download=$(curl -I -L -s -f -JO -w "%{filename_effective}" -m 30 ${aemet_download_endpoint})
-    exitcode=$?
+	# First issue a HEAD request only to retrieve the Content-Disposition Header with the server filename.
+	file_to_download=$(curl -I -L -s -f -JO -w "%{filename_effective}" -m 30 ${aemet_download_endpoint})
+	exitcode=$?
 
-    if [ $exitcode -eq 0 ]; then
-        log "INFO: File found: $file_to_download"
+	if [ $exitcode -eq 0 ]; then
+		log "INFO: File found: $file_to_download"
 
-        # Read the filename of the last downloaded file to see if the contents were updated
-        last_downloaded=$( getLastDownloadedFilename )
+		# Read the filename of the last downloaded file to see if the contents were updated
+		last_downloaded=$( getLastDownloadedFilename )
 
-        if [ "$file_to_download" == "$last_downloaded" ]; then
-            log "INFO: File has already been processed."
-        else
-            # Delete the file created by the HEAD request. Only contain the headers
-            rm $file_to_download
+		if [ "$file_to_download" == "$last_downloaded" ]; then
+			log "INFO: File has already been processed."
+		else
+			# Delete the file created by the HEAD request. Only contain the headers
+			rm $file_to_download
 
-            # Request the actual file
-            file_downloaded=$(curl -L -s -f -JO -w "%{filename_effective}" -m 30 ${aemet_download_endpoint})
-            exitcode=$?
+			# Request the actual file
+			file_downloaded=$(curl -L -s -f -JO -w "%{filename_effective}" -m 30 ${aemet_download_endpoint})
+			exitcode=$?
 
-            if [ $exitcode -eq 0 ]; then
-                log "INFO: File downloaded: $file_downloaded"
+			if [ $exitcode -eq 0 ]; then
+				log "INFO: File downloaded: $file_downloaded"
 
-                if [ `file -b $working_dir/$file_downloaded | grep "gzip compressed data" | wc -l` -eq 1 ]; then
-                    if [ `stat -c %s $working_dir/$file_downloaded` -gt 0 ]; then
-                        # Extract the update epoch from filename
-                        update_epoch=$(echo $file_downloaded | sed -n -E "s/^descargas_([0-9]{10}).tar.gz$/\1/p")
-                        log "INFO: Data update corresponds to `date -d @$update_epoch`"
+				if [ `file -b $working_dir/$file_downloaded | grep "gzip compressed data" | wc -l` -eq 1 ]; then
+					if [ `stat -c %s $working_dir/$file_downloaded` -gt 0 ]; then
+						# Extract the update epoch from filename
+						update_epoch=$(echo $file_downloaded | sed -n -E "s/^descargas_([0-9]{10}).tar.gz$/\1/p")
+						log "INFO: Data update corresponds to `date -d @$update_epoch`"
 
-                        # Decompress the file
-                        tar -xzf $working_dir/$file_downloaded -C $working_dir
+						# Decompress the file
+						tar -xzf $working_dir/$file_downloaded -C $working_dir
 
-                        # Remove ECHOTOP and accumulation files
-                        find $working_dir -type f -not -name "*PPI.Z*" -exec rm {} \;
+						# Remove ECHOTOP and accumulation files
+						find $working_dir -type f -not -name "*PPI.Z*" -exec rm {} \;
 
-                        # Set the flag to continue processing
-                        continue_processing="YES"
+						# Set the flag to continue processing
+						continue_processing="YES"
 
-                        # Save the filename for next downlods
-                        setLastDownloadedFilename $file_downloaded
-                    else
-                        log "SEVERE: file $working_dir/$file_downloaded size is 0!"
-                        rm -f $working_dir/$file_downloaded
-                    fi
-                else
-                    log "SEVERE: file $working_dir/$file_downloaded is not a gZip file!"
-                    rm -f $working_dir/$file_downloaded
-                fi
+						# Save the filename for next downlods
+						setLastDownloadedFilename $file_downloaded
+					else
+						log "SEVERE: file $working_dir/$file_downloaded size is 0!"
+						rm -f $working_dir/$file_downloaded
+					fi
+				else
+					log "SEVERE: file $working_dir/$file_downloaded is not a gZip file!"
+					rm -f $working_dir/$file_downloaded
+				fi
 
-            else
-                log "WARNING: Received server errors on GET HTTP request."
-                rm -f $working_dir/$file_downloaded
-            fi
-        fi
+			else
+				log "WARNING: Received server errors on GET HTTP request."
+				rm -f $working_dir/$file_downloaded
+			fi
+		fi
 
-    else
+	else
 		log "WARNING: Received server errors on the HEAD HTTP request."
 		rm -f $working_dir/$file_to_download
 	fi
 
-    # Return to the previous directory
-    cd $previous_dir
+	# Return to the previous directory
+	cd $previous_dir
 }
 
 # Used to mantain the filename as expected from legacy programs
 function renameFiles {
-    local working_dir=$1
-    for file in $working_dir/*
-    do
-        local basename=$(basename $file)
+	local working_dir=$1
+	for file in $working_dir/*
+	do
+		local basename=$(basename $file)
 
-        # Sample file: down_SAN200313131000.PPI.Z_005_240.tif
-        local date=$(echo $basename | sed -n -E "s/^down_\w{3}([0-9]{12}).*$/\1/p")
-        # The date from the file only contains the last 2 digits of the year
-        local year="20${date:0:2}"
-        local month="${date:2:2}"
-        local day="${date:4:2}"
-        local hour="${date:6:2}"
-        local minute="${date:8:2}"
-        
-        local radar_code=$(echo $basename | sed -n -E "s/^down_(\w{3}).*$/\1/p")
-        local radar_name=$( getRadarName $radar_code )
-        
-        # Expected legacy format: 202003131240_valencia.tif
-        local name="${year}${month}${day}${hour}${minute}_$radar_name.tif"
-        log "INFO: File $name"
-        mv $file $working_dir/$name
-    done
+		# Sample file: down_SAN200313131000.PPI.Z_005_240.tif
+		local date=$(echo $basename | sed -n -E "s/^down_\w{3}([0-9]{12}).*$/\1/p")
+		# The date from the file only contains the last 2 digits of the year
+		local year="20${date:0:2}"
+		local month="${date:2:2}"
+		local day="${date:4:2}"
+		local hour="${date:6:2}"
+		local minute="${date:8:2}"
+		
+		local radar_code=$(echo $basename | sed -n -E "s/^down_(\w{3}).*$/\1/p")
+		local radar_name=$( getRadarName $radar_code )
+		
+		# Expected legacy format: 202003131240_valencia.tif
+		local name="${year}${month}${day}${hour}${minute}_$radar_name.tif"
+		log "INFO: File $name"
+		mv $file $working_dir/$name
+	done
 }
 
 function backupFiles {
-    local working_dir=$1
+	local working_dir=$1
 
-    for file in $working_dir/*
-    do
-        local basename=$(basename $file)
-        local date=$(echo $basename | sed -n -E "s/^([0-9]{12}).*$/\1/p")
-        local year="20${date:0:4}"
-        local month="${date:4:2}"
-        local day="${date:6:2}"
+	for file in $working_dir/*
+	do
+		local basename=$(basename $file)
+		local date=$(echo $basename | sed -n -E "s/^([0-9]{12}).*$/\1/p")
+		local year="20${date:0:4}"
+		local month="${date:4:2}"
+		local day="${date:6:2}"
 
-        target_backup_dir="$backup_dir/${year}_${month}/$day"
-        if [ ! -e $target_backup_dir ]; then mkdir -p $target_backup_dir; fi
+		target_backup_dir="$backup_dir/${year}_${month}/$day"
+		if [ ! -e $target_backup_dir ]; then mkdir -p $target_backup_dir; fi
 
-        cp $file $target_backup_dir
-    done
+		cp $file $target_backup_dir
+	done
 }
 
 function hideFiles {
-    local working_dir=$1
+	local working_dir=$1
 	local i=0
 
 	for i in `ls $working_dir`; do
@@ -207,7 +207,7 @@ function hideFiles {
 }
 
 function unhideFiles {
-    local working_dir=$1
+	local working_dir=$1
 	local i=0
 
 	for i in `find $working_dir -maxdepth 1 -type f -name "\.*"`; do
@@ -218,12 +218,12 @@ function unhideFiles {
 }
 
 function distributeFiles {
-    local working_dir=$1
-    
-    # Hide files
-    hideFiles $working_dir
+	local working_dir=$1
+	
+	# Hide files
+	hideFiles $working_dir
 
-    # Distribute Donosti files
+	# Distribute Donosti files
 	for j in $dist_donosti; do
 		if [ ! -e $j ]; then mkdir -p $j; fi
 		cp $working_dir/.*_donosti.tif $j
@@ -259,33 +259,33 @@ function distributeFiles {
 }
 
 function getAemetRadarImages {
-    mkdir -p $temp_dir
+	mkdir -p $temp_dir
 
 	# Download into the temporary dir
-    downloadImages $temp_dir
+	downloadImages $temp_dir
 
-    if [ "$continue_processing" == "YES" ]; then
-        # Rename the files. Needed for legacy applications
-        renameFiles $temp_dir
+	if [ "$continue_processing" == "YES" ]; then
+		# Rename the files. Needed for legacy applications
+		renameFiles $temp_dir
 
-        # Backup
-        if [ "$do_backup" == "YES" ]; then
-            log "INFO: Backup"
-            backupFiles $temp_dir
-        fi
+		# Backup
+		if [ "$do_backup" == "YES" ]; then
+			log "INFO: Backup"
+			backupFiles $temp_dir
+		fi
 
-        log "INFO: Distribute"
-        distributeFiles $temp_dir
-    fi
+		log "INFO: Distribute"
+		distributeFiles $temp_dir
+	fi
 
-    # Cleanup
+	# Cleanup
 	rm -rf $temp_dir
 }
 
 
 ########### Main
 (
-    log "INFO: Start"
+	log "INFO: Start"
 
 	if flock -n 201; then
 		echo $pid >> $lockfile
@@ -295,7 +295,7 @@ function getAemetRadarImages {
 		log "FATAL ERROR: Script is already executing. Exiting now."
 	fi
 
-    log "INFO: Done"
+	log "INFO: Done"
 ) 201>$lockfile
 
 exit 0
