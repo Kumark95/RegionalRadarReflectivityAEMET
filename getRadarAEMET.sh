@@ -5,7 +5,6 @@ base_path=$( readlink -f `dirname $0` )
 log_file=$base_path/`basename $0 .sh`.log
 lockfile=$base_path/`basename $0 .sh`.lck
 pid=$$
-radar_short_codes='COR ALM SAN BAR BAD PMA LPA MAD MAL MUR LID SEV VAL SSE ZAR'
 
 # Distribution paths
 dist_peninsula='/home/cristhian/Documents/2020_03_13__AemetRadarWebChanges/dist'
@@ -16,8 +15,6 @@ dist_madrid=''
 dist_uid=1000
 dist_gid=1000
 
-# Used to download the images
-temp_dir=$(mktemp -d)
 # File used to store the filename of the available file to download. Changes each time the data is updated by AEMET
 last_downloaded_filename="$base_path/`basename $0 .sh`__last_downloaded_filename.txt"
 
@@ -26,6 +23,8 @@ do_backup=YES
 backup_dir='/home/cristhian/Documents/2020_03_13__AemetRadarWebChanges/backup'
 
 aemet_download_endpoint='https://www.aemet.es/es/api-eltiempo/radar/download/PPI'
+radar_short_codes='COR ALM SAN BAR BAD PMA LPA MAD MAL MUR LID SEV VAL SSE ZAR'
+
 # Control execution
 continue_processing="NO"
 
@@ -259,6 +258,8 @@ function distributeFiles {
 }
 
 function getAemetRadarImages {
+	local temp_dir=$(mktemp -d)
+
 	# Download into the temporary dir
 	downloadImages $temp_dir
 
