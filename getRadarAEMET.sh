@@ -7,7 +7,7 @@ lockfile=$base_path/`basename $0 .sh`.lck
 pid=$$
 radar_short_codes='COR ALM SAN BAR BAD PMA LPA MAD MAL MUR LID SEV VAL SSE ZAR'
 
-## Distribution paths
+# Distribution paths
 dist_peninsula='/home/cristhian/Documents/2020_03_13__AemetRadarWebChanges/dist'
 dist_canary='/home/cristhian/Documents/2020_03_13__AemetRadarWebChanges/dist_can'
 dist_donosti=''
@@ -16,17 +16,17 @@ dist_madrid=''
 dist_uid=1000
 dist_gid=1000
 
-## Used to download the images
+# Used to download the images
 temp_dir='/home/cristhian/Documents/2020_03_13__AemetRadarWebChanges/temp'
-## File used to store the filename of the available file to download. Changes each time the data is updated by AEMET
+# File used to store the filename of the available file to download. Changes each time the data is updated by AEMET
 last_downloaded_filename="$base_path/`basename $0 .sh`__last_downloaded_filename.txt"
 
-## Backup if needed
+# Backup if needed
 do_backup=YES
 backup_dir='/home/cristhian/Documents/2020_03_13__AemetRadarWebChanges/backup'
 
 aemet_download_endpoint='https://www.aemet.es/es/api-eltiempo/radar/download/PPI'
-## Control execution
+# Control execution
 continue_processing="NO"
 
 
@@ -72,68 +72,85 @@ function setLastDownloadedFilename {
     echo $filename > $last_downloaded_filename
 }
 
-
-
 function downloadImages {
-	local working_dir=$(pwd)
+    local previous_dir=$(pwd)
+	local working_dir=$1
 
-    # Change dir as curl with -JO options downloads in the working dir
-    cd $temp_dir
+    # Change dir as curl with -JO options downloads in the current dir
+    cd $working_dir
 
     log "INFO: Downloading images..."
-	# Extract the filename from the Content-Disposition Header. It correspond to the epoch where the data was updated
-	# Curl options:
+	# Curl options used:
+    #   -I      HEAD HTTP Request
 	#	-L		Follow redirects
 	# 	-s 		Silent
     #   -f      Fail on server errors
 	#	-OJ		Download the file using the Content-Disposition filename
 	#	-w		Echo to Stout the filename
 	#	-m 		Timeout
-	file_downloaded=$(curl -L -s -f -JO -w "%{filename_effective}" -m 30 ${aemet_download_endpoint})
+
+    # First issue a HEAD request only to retrieve the Content-Disposition Header with the server filename.
+    file_to_download=$(curl -I -L -s -f -JO -w "%{filename_effective}" -m 30 ${aemet_download_endpoint})
     exitcode=$?
 
-    # Return to working dir after download
-    cd $working_dir
-
     if [ $exitcode -eq 0 ]; then
-        log "INFO: File downloaded: $file_downloaded"
-
-        # Extract epoch from filename
-        update_epoch=$(echo $file_downloaded | sed -n -E "s/^descargas_([0-9]{10}).tar.gz$/\1/p")
-        log "INFO: Data update corresponds to `date -d @$update_epoch`"
+        log "INFO: File found: $file_to_download"
 
         # Read the filename of the last downloaded file to see if the contents were updated
         last_downloaded=$( getLastDownloadedFilename )
 
-        if [ "$file_downloaded" == "$last_downloaded" ]; then
+        if [ "$file_to_download" == "$last_downloaded" ]; then
             log "INFO: File has already been processed."
         else
-            if [ `file -b $temp_dir/$file_downloaded | grep "gzip compressed data" | wc -l` -eq 1 ]; then
-                if [ `stat -c %s $temp_dir/$file_downloaded` -gt 0 ]; then
-                    # Decompress the file
-                    tar -xzf $temp_dir/$file_downloaded -C $temp_dir
+            # Delete the file created by the HEAD request. Only contain the headers
+            rm $file_to_download
 
-                    # Remove ECHOTOP and accumulation files
-                    find $temp_dir -type f -not -name "*PPI.Z*" -exec rm {} \;
+            # Request the actual file
+            file_downloaded=$(curl -L -s -f -JO -w "%{filename_effective}" -m 30 ${aemet_download_endpoint})
+            exitcode=$?
 
-                    # Set the flag to continue processing
-                    continue_processing="YES"
+            if [ $exitcode -eq 0 ]; then
+                log "INFO: File downloaded: $file_downloaded"
 
-                    # Save the filename for next downlods
-                    setLastDownloadedFilename $file_downloaded
+                if [ `file -b $working_dir/$file_downloaded | grep "gzip compressed data" | wc -l` -eq 1 ]; then
+                    if [ `stat -c %s $working_dir/$file_downloaded` -gt 0 ]; then
+                        # Extract the update epoch from filename
+                        update_epoch=$(echo $file_downloaded | sed -n -E "s/^descargas_([0-9]{10}).tar.gz$/\1/p")
+                        log "INFO: Data update corresponds to `date -d @$update_epoch`"
+
+                        # Decompress the file
+                        tar -xzf $working_dir/$file_downloaded -C $working_dir
+
+                        # Remove ECHOTOP and accumulation files
+                        find $working_dir -type f -not -name "*PPI.Z*" -exec rm {} \;
+
+                        # Set the flag to continue processing
+                        continue_processing="YES"
+
+                        # Save the filename for next downlods
+                        setLastDownloadedFilename $file_downloaded
+                    else
+                        log "SEVERE: file $working_dir/$file_downloaded size is 0!"
+                        rm -f $working_dir/$file_downloaded
+                    fi
                 else
-                    log "SEVERE: file $temp_dir/$file_downloaded size is 0!"
-                    rm -f $temp_dir/$file_downloaded
+                    log "SEVERE: file $working_dir/$file_downloaded is not a gZip file!"
+                    rm -f $working_dir/$file_downloaded
                 fi
+
             else
-                log "SEVERE: file $temp_dir/$file_downloaded is not a gZip file!"
-                rm -f $temp_dir/$file_downloaded
+                log "WARNING: Received server errors on GET HTTP request."
+                rm -f $working_dir/$file_downloaded
             fi
         fi
+
     else
-		log "WARNING: Received server errors on HTTP request."
-		rm -f $temp_dir/$file_downloaded
+		log "WARNING: Received server errors on the HEAD HTTP request."
+		rm -f $working_dir/$file_to_download
 	fi
+
+    # Return to the previous directory
+    cd $previous_dir
 }
 
 # Used to mantain the filename as expected from legacy programs
@@ -234,7 +251,7 @@ function distributeFiles {
 	# Distribute individual radars
 	for j in $dist_peninsula; do
 		if [ ! -e $j ]; then mkdir -p $j; fi
-		cp $temp_dir/.*.tif $j
+		cp $working_dir/.*.tif $j
 		chown -R $dist_uid:$dist_gid $j
 		unhideFiles $j
 	done
@@ -245,7 +262,7 @@ function getAemetRadarImages {
     mkdir -p $temp_dir
 
 	# Download into the temporary dir
-    downloadImages
+    downloadImages $temp_dir
 
     if [ "$continue_processing" == "YES" ]; then
         # Rename the files. Needed for legacy applications
