@@ -22,8 +22,8 @@ last_downloaded_filename="$base_path/`basename $0 .sh`__last_downloaded_filename
 do_backup=YES
 backup_dir='/home/cristhian/Documents/2020_03_13__AemetRadarWebChanges/backup'
 
+# Download info
 aemet_download_endpoint='https://www.aemet.es/es/api-eltiempo/radar/download/PPI'
-radar_short_codes='COR ALM SAN BAR BAD PMA LPA MAD MAL MUR LID SEV VAL SSE ZAR'
 
 # Control execution
 continue_processing="NO"
@@ -39,7 +39,7 @@ function getRadarName {
 	case $1 in
 		'COR') echo 'corunha' ;;
 		'ALM') echo 'almeria' ;;
-		'SAN') echo 'santander' ;; ## TODO CHECK
+		'SAN') echo 'santander' ;;
 		'BAR') echo 'barcelona' ;;
 		'BAD') echo 'caceres' ;;
 		'PMA') echo 'mallorca' ;;
@@ -50,7 +50,7 @@ function getRadarName {
 		'LID') echo 'palencia' ;;
 		'SEV') echo 'sevilla' ;;
 		'VAL') echo 'valencia' ;;
-		'SSE') echo 'donosti' ;; ## TODO CHECK
+		'SSE') echo 'donosti' ;;
 		'ZAR') echo 'zaragoza' ;;
 	esac
 }
